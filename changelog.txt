@@ -1,0 +1,18 @@
+1.0.0: 
+    - First deployed version
+
+1.0.1: 
+    - Changed help function to a!help
+    - Displayed help function in game activity
+    - Scheduled auto-archiving to run every 12 hours, not 24
+
+2.0.0:
+    - SWITCHED TO USING POSTGRESQL TO STORE SERVER DATA
+    - Required manage_server permissions for a!config and a!archive
+    - Added command "a!arch" (shortened "archive")
+    - Added new set commands ("a!set", "a!timeout")
+    - Added "a!limit" to prevent auto-archiving in designated channels
+    - Updated help menu
+
+2.0.1:
+    - Bug fix: autoArchive() crashes if server is not in database

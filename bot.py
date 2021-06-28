@@ -115,8 +115,11 @@ def readServer(id):
 
     # print(server)
 
-    return server[0]       # Returns a tuple where server[0] = id, server[1] = archive channel, server[2] = timeout, 
-                        # server[3] = permanent categories, server[4] = permanent channels
+    if(len(server) > 0):
+        return server[0]       # Returns a tuple where server[0] = id, server[1] = archive channel, server[2] = timeout, 
+                                # server[3] = permanent categories, server[4] = permanent channels
+    else:
+        return None
 
 def updateServer(id, key, newValue):
 
@@ -330,7 +333,7 @@ async def autoArchive():
 
         # print("Length: " + len(server))
 
-        if(len(server) > 1): # If that server is in the database
+        if(readServer != None and len(server) > 1): # If that server is in the database
 
             permanent_categories = server[3].split("\n")
             # print(permanent_categories)
