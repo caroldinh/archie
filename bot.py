@@ -333,7 +333,7 @@ async def autoArchive():
 
         # print("Length: " + len(server))
 
-        if(readServer != None and len(server) > 1): # If that server is in the database
+        if(server != None and len(server) > 1): # If that server is in the database
 
             permanent_categories = server[3].split("\n")
             # print(permanent_categories)
