@@ -16,3 +16,6 @@
 
 2.0.1:
     - Bug fix: autoArchive() crashes if server is not in database
+
+2.0.2:
+    - Bug fix: send a message if the server archive is full (>50 channels)

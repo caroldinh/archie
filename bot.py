@@ -14,7 +14,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.0.1")
+activity = discord.Game(name="a!help | v.2.0.2")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -299,9 +299,12 @@ async def archive(ctx):
     if archive == None:
         await ctx.message.channel.send("An archive category does not exist. Please use **a!setup** to create one.")
     else:
-        # Move to archive category
-        await ctx.message.channel.edit(category=archive)
-        await ctx.message.channel.send("This channel has been archived.")
+        # Move to archive category if there is space in the archive
+        if(len(archive.channels) < 50):
+            await ctx.message.channel.edit(category=archive)
+            await ctx.message.channel.send("This channel has been archived.")
+        else:
+           await ctx.message.channel.send(f"Your archive channel **{archive.name}** is full. Please create a new archive channel and reconfigure if necessary.")
 
 # Shortened version of archive
 @bot.command()
@@ -326,7 +329,6 @@ async def autoArchive():
     activeservers = bot.guilds
     for guild in activeservers:
 
-
         id = guild.id
         archive = 0
         server = readServer(id)
@@ -342,21 +344,29 @@ async def autoArchive():
             # Go through every text channel
             for channel in guild.channels:
                
-                if str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories)):
-                    inactive = await checkTimedOut(channel, timeout)
-                    if inactive:
+                try:
+                    if str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories)):
+                        inactive = await checkTimedOut(channel, timeout)
+                        if inactive:
 
-                        # These two lines exist mainly to get the context
-                        lastMessage = await channel.fetch_message(channel.last_message_id)
-                        ctx = await bot.get_context(lastMessage)
+                            # These two lines exist mainly to get the context
+                            lastMessage = await channel.fetch_message(channel.last_message_id)
+                            ctx = await bot.get_context(lastMessage)
 
-                        # Get the archive category
-                        if archive == 0:
-                            archive = getCategory(server[1], ctx)
+                            # Get the archive category. If there is no archive category, nothing happens.
+                            if archive == 0:
+                                archive = getCategory(server[1], ctx)
 
-                        if archive != None:
-                            # Move to archive category
-                            await channel.edit(category=archive)
+                            if archive != None:
+                                # Move to archive category
+                                if(len(archive.channels) < 50):
+                                    await channel.edit(category=archive)
+                                else:
+                                    if guild.system_channel: # If it is not None
+                                        await guild.system_channel.send(f"Your archive channel **{archive.name}** is full. Please create a new archive channel and reconfigure if necessary.")
+                except:
+                    if guild.system_channel: # If it is not None
+                        await guild.system_channel.send("Error in auto-archiving channels.")
 
 
 @bot.event
