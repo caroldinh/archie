@@ -14,12 +14,13 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.0")
+activity = discord.Game(name="a!help | v.2.1.1")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
-bot.remove_command("help")
+connection = psycopg2.connect(DATABASE_URL, sslmode='require')
 
+bot.remove_command("help")
 
 # Return category object from string name
 def getCategory(name, ctx):
@@ -27,6 +28,14 @@ def getCategory(name, ctx):
             if(category.name.lower() == name.lower()):
                 return category
     return None
+
+async def getLogChannel(id):
+    guild = bot.get_guild(id)
+    for channel in guild.channels:
+        if(channel.name == "archie-logs"):
+                return channel
+    channel = await guild.create_text_channel('archie-logs')
+    return channel
 
 def isMessage(message):
     return message.author != bot.user
@@ -78,7 +87,6 @@ def execute_read_query(connection, query):
         print(f"The error '{e}' occurred")
 
 def addServer(id, category, timeout):
-    connection = psycopg2.connect(DATABASE_URL, sslmode='require')
 
     create_servers_table = """
     CREATE TABLE IF NOT EXISTS servers (
@@ -109,8 +117,6 @@ def addServer(id, category, timeout):
 
 def readServer(id):
 
-    connection = psycopg2.connect(DATABASE_URL, sslmode='require')
-
     select_server = (f"SELECT * FROM servers WHERE id={id}")
     server = execute_read_query(connection, select_server)
 
@@ -123,8 +129,6 @@ def readServer(id):
         return None
 
 def updateServer(id, key, newValue):
-
-    connection = psycopg2.connect(DATABASE_URL, sslmode='require')
 
     update_server = (f"""
         UPDATE servers
@@ -177,7 +181,6 @@ async def getCatList(ctx):
             count += 1
     return [catList, catDisplay]
 
-@bot.command()
 async def inputCat(ctx):
 
     id = ctx.message.guild.id
@@ -301,13 +304,12 @@ async def archive(ctx):
             await ctx.message.channel.edit(category=archive)
             await ctx.message.channel.send("This channel has been archived.")
         else:
-           await ctx.message.channel.send(f"Your archive channel **{archive.name}** is full. Please make space in your archive or create a new one.")
+           await ctx.message.channel.send(f"Your archive channel **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
 
 # Shortened version of archive
 @bot.command()
 @has_permissions(manage_guild=True)
 async def arch(ctx):
-
     await archive(ctx)
 
 '''
@@ -334,6 +336,7 @@ async def deleteafter(ctx, days):
 @set.error
 @timeout.error
 @limit.error
+@deleteafter.error
 async def permissions_error(ctx, error):
     if isinstance(error, MissingPermissions):
         await ctx.message.channel.send("You don't have permission to do this!")
@@ -351,16 +354,18 @@ async def autoArchive():
         server = readServer(id)
         archiveIsFull = False
 
-        # print("Length: " + len(server))
+        logChannel = None
+
+        if(guild.system_channel):
+            logChannel = guild.system_channel
+        else:
+            logChannel = await getLogChannel(id)
 
         if(server != None and len(server) > 1): # If that server is in the database
 
             permanent_categories = server[3].split("\n")
-            # print(permanent_categories)
             timeout = server[2]
             delete_time = server[5]
-
-            # print(delete_time)
 
             # Go through every text channel
             for channel in guild.channels:
@@ -375,8 +380,9 @@ async def autoArchive():
                                     delete = await checkTimedOut(channel, delete_time) # Check if channel is scheduled for deletion
                                     if delete:
                                         await channel.delete()
-                                    elif guild.system_channel: # Send warning
-                                        await guild.system_channel.send(f"<#{channel.id}> will be deleted in 2 days if it remains inactive.")
+                                        # pass
+                                    else:
+                                        await logChannel.send(f"<#{channel.id}> will be deleted in 2 days if it remains inactive.")
                             else:
                                 print("Delete time not set")
                         
@@ -399,12 +405,11 @@ async def autoArchive():
                                     else:
                                         archiveIsFull = True
                 except Exception as e:
-                    if guild.system_channel: # If it is not None
-                        await guild.system_channel.send("Error in auto-archiving channels.")
+                    await logChannel.send("Error in auto-archiving channels.")
                     print(e)
             
-            if archiveIsFull and guild.system_channel: # If the archive is full
-                    await guild.system_channel.send(f"Your archive channel **{archive.name}** is full. Please make space in your archive or create a new one.")
+            if archiveIsFull:
+                    logChannel.send(f"Your archive channel **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
 
 
 @bot.event
