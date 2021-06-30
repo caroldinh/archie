@@ -9,12 +9,13 @@ import time
 from datetime import datetime, timezone
 import psycopg2
 from psycopg2 import OperationalError
+import asyncio
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.2")
+activity = discord.Game(name="a!help | v.2.1.3")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -43,16 +44,8 @@ def isMessage(message):
 def isNumMessage(message):
     return isMessage(message) and message.content.isnumeric()
 
-# Get time since last message
-async def checkTimedOut(channel, timeout):
+async def getTimeSince(message):
 
-    # Get last message
-
-    if channel.last_message_id == None: # If there are no messages in channel
-        return False
-
-    message = await channel.fetch_message(channel.last_message_id)
-    
     id = message.guild.id
     timestamp = message.created_at
 
@@ -63,6 +56,21 @@ async def checkTimedOut(channel, timeout):
     # Get time difference and convert to seconds
     time_since = now - timestamp
     time_since = time_since.total_seconds()
+
+    return time_since
+
+
+# Get time since last message
+async def checkTimedOut(channel, timeout):
+
+    # Get last message
+
+    if channel.last_message_id == None: # If there are no messages in channel
+        return False
+
+    message = await channel.fetch_message(channel.last_message_id)
+    
+    time_since = await getTimeSince(message)
 
     # Retrieve timeout time and check if channel has timed out
     return time_since > 60 * 60 * 24 * timeout
@@ -176,7 +184,7 @@ async def getCatList(ctx):
     archive = readServer(id)[1]
     for category in ctx.message.guild.categories:
         if category.name != archive: # Exclude the archive category
-            catDisplay.append(f"[{count}] {category.name}")
+            catDisplay.append(f"[{count}] {category.name.upper()}")
             catList.append(category.name)
             count += 1
     return [catList, catDisplay]
@@ -199,8 +207,13 @@ async def inputCat(ctx):
     def check(message):
         return isNumMessage(message) and int(message.content) > 0 and int(message.content) <= len(catList)
 
-    cat_num = int((await bot.wait_for("message", check=check, timeout=60.0)).content)
-    return catList[cat_num - 1]
+    try:
+        cat_num = int((await bot.wait_for("message", check=check, timeout=20.0)).content)
+        if cat_num:
+            return catList[cat_num - 1]
+    except asyncio.TimeoutError:
+        await ctx.message.channel.send("Sorry, you took too long!")
+        return None
 
 async def inputCatList(ctx):
 
@@ -227,13 +240,17 @@ async def inputCatList(ctx):
                 return False
         return True
 
-    cats = (await bot.wait_for("message", check=check, timeout=60.0)).content
-    cats = cats.split()
-    categories = []
-    for c in cats:
-        categories.append(catList[int(c) - 1])
-    # print(categories)
-    return categories
+    try:
+        cats = (await bot.wait_for("message", check=check, timeout=20.0)).content
+        cats = cats.split()
+        categories = []
+        for c in cats:
+            categories.append(catList[int(c) - 1])
+        # print(categories)
+        return categories
+    except asyncio.TimeoutError:
+        await ctx.message.channel.send("Sorry, you took too long!")
+        return None
 
 @bot.command()
 @has_permissions(manage_guild=True)
@@ -241,22 +258,27 @@ async def config(ctx):
 
     # Get archive category name
     await ctx.message.channel.send("What is the name of your archive category? (NOT case sensitive)")
-    cat_name = (await bot.wait_for("message", check=isMessage, timeout=60.0)).content
+    try:
+        cat_name = (await bot.wait_for("message", check=isMessage, timeout=20.0)).content
 
-    # Get timeout time
-    await ctx.message.channel.send("After how many days should channels be archived? (Must be a full number)")
-    timeout = (await bot.wait_for("message", check=isNumMessage, timeout=60.0)).content
-    
-    id = ctx.message.guild.id
-    if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
-        await ctx.message.channel.send("Category **" + cat_name + "** created.")
-        category = await ctx.message.guild.create_category(cat_name)
+        # Get timeout time
+        await ctx.message.channel.send("After how many days should channels be archived? (Must be a full number)")
+        timeout = (await bot.wait_for("message", check=isNumMessage, timeout=20.0)).content
+        
+        id = ctx.message.guild.id
+        if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
+            await ctx.message.channel.send("Category **" + cat_name + "** created.")
+            category = await ctx.message.guild.create_category(cat_name)
 
-    # Save information to archives.txt
-    # writeArchive(id, cat_name, timeout)
-    addServer(id, cat_name, timeout)
+        # Save information to archives.txt
+        # writeArchive(id, cat_name, timeout)
+        addServer(id, cat_name, timeout)
+        
+        await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
     
-    await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
+    except asyncio.TimeoutError:
+        await ctx.message.channel.send("Sorry, you took too long!")
+        return None
 
 @bot.command()
 @has_permissions(manage_guild=True)
@@ -281,10 +303,10 @@ async def limit(ctx):
     await ctx.message.channel.send("List which categories should NOT be automatically archived.")
 
     cats = await inputCatList(ctx)
-    # print(cats)
-    cats = "\n".join(cats)
-    updateServer(id, "permanent_categories", f"'{cats}'")
-    await ctx.message.channel.send(f"The following categories will NOT be automatically archived:\n**{cats.upper()}**")
+    if cats:
+        cats = "\n".join(cats)
+        updateServer(id, "permanent_categories", f"'{cats}'")
+        await ctx.message.channel.send(f"The following categories will NOT be automatically archived:\n**{cats.upper()}**")
 
 # Manually archive a channel
 @bot.command()
@@ -428,16 +450,29 @@ async def on_message(message):
     try: # If an archive category exists
         archive = getCategory(readServer(id)[1], ctx)
 
-        # If the message is in a category and the category name is the archive and the message was sent by the user and the message is not a category name
-        if message.channel.category != None and message.channel.category.name == archive.name and message.author != bot.user and not isNumMessage(message):
+        history = await ctx.message.channel.history(limit=2).flatten()
+        previous_message = history[1]
+        print(previous_message)
+
+        # If the message is in a category and 
+        # the category name is the archive and 
+        # the message was sent by the user and 
+        # the message is not a response to the bot 
+            # assuming the response has not timed out
+
+        if message.channel.category != None and \
+        message.channel.category.name == archive.name and \
+        message.author != bot.user and \
+        (previous_message.author != bot.user or \
+        await getTimeSince(previous_message) >= 20):
 
             await message.channel.send("This channel has been archived! Which category would you like to restore it to?")
 
             # Get the category we want to restore the channel to and move channel
             cat_name = await inputCat(ctx)
-            await message.channel.edit(category=getCategory(cat_name, ctx))
-
-            await message.channel.send("Channel restored to **" + cat_name.upper() + "**.")
+            if cat_name:
+                await message.channel.edit(category=getCategory(cat_name, ctx))
+                await message.channel.send("Channel restored to **" + cat_name.upper() + "**.")
         
         await bot.process_commands(message) # Process commands
     

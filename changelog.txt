@@ -31,3 +31,7 @@
 
 2.1.2:
     - Bug fix: Update connection throughout program in case DATABASE_URL changes
+
+2.1.3
+    - Add timeout messages
+    - Capitalize category names in getCatList()
