@@ -12,13 +12,13 @@ from psycopg2 import OperationalError
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-DATABASE_URL = os.getenv('DATABASE_URL')
+# DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.1")
+activity = discord.Game(name="a!help | v.2.1.2")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
-connection = psycopg2.connect(DATABASE_URL, sslmode='require')
+connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
 
 bot.remove_command("help")
 
@@ -345,6 +345,9 @@ async def permissions_error(ctx, error):
 @tasks.loop(hours=24)
 async def autoArchive():
 
+    # Update connection in case DATABASE_URL changed
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
+
     # Run this in all of the servers Archie is active in
     activeservers = bot.guilds
     for guild in activeservers:
@@ -414,6 +417,9 @@ async def autoArchive():
 
 @bot.event
 async def on_message(message):
+
+    # Update connection in case DATABASE_URL changed
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
 
     # Get context and current guild
     ctx = await bot.get_context(message)

@@ -28,3 +28,6 @@
     - Optimized database connection for faster autoArchive process
     - Minor message corrections (i.e. capitalization)
     - Create log channel if no system messages channel
+
+2.1.2:
+    - Bug fix: Update connection throughout program in case DATABASE_URL changes
