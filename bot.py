@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.3")
+activity = discord.Game(name="a!help | v.2.1.4")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -59,21 +59,23 @@ async def getTimeSince(message):
 
     return time_since
 
+async def daysSinceActive(channel):
+
+    # Get last message
+    if channel.last_message_id == None: # If there are no messages in channel
+        return 0
+
+    message = await channel.fetch_message(channel.last_message_id)
+    
+    time_since = round(await getTimeSince(message) / (60 * 60 * 24))
+
+    return time_since
 
 # Get time since last message
 async def checkTimedOut(channel, timeout):
 
-    # Get last message
-
-    if channel.last_message_id == None: # If there are no messages in channel
-        return False
-
-    message = await channel.fetch_message(channel.last_message_id)
-    
-    time_since = await getTimeSince(message)
-
-    # Retrieve timeout time and check if channel has timed out
-    return time_since > 60 * 60 * 24 * timeout
+    days_since = await daysSinceActive(channel)
+    return days_since > timeout
 
 def execute_query(connection, query):
     connection.autocommit = True
@@ -364,7 +366,7 @@ async def permissions_error(ctx, error):
         await ctx.message.channel.send("You don't have permission to do this!")
 
 # Automatically archive inactive channels after 24 hours
-@tasks.loop(hours=24)
+# @tasks.loop(hours=24)
 async def autoArchive():
 
     # Update connection in case DATABASE_URL changed
@@ -392,6 +394,8 @@ async def autoArchive():
             timeout = server[2]
             delete_time = server[5]
 
+            error = False
+
             # Go through every text channel
             for channel in guild.channels:
                
@@ -400,14 +404,18 @@ async def autoArchive():
 
                         if(channel.category != None and channel.category.name == server[1]):
                             if(delete_time != None and delete_time > timeout): # Check if a delete time has been set
-                                warning = await checkTimedOut(channel, delete_time - 2) # Check if <=2 days until scheduled deletion
-                                if warning:
-                                    delete = await checkTimedOut(channel, delete_time) # Check if channel is scheduled for deletion
-                                    if delete:
+
+                                days_since = await daysSinceActive(channel) # Check days since last active
+                                
+                                if days_since + 2 > delete_time:
+                                
+                                    if days_since > delete_time:
                                         await channel.delete()
                                         # pass
+                                    
                                     else:
-                                        await logChannel.send(f"<#{channel.id}> will be deleted in 2 days if it remains inactive.")
+                                        days_until = delete_time - days_since
+                                        await logChannel.send(f"<#{channel.id}> will be deleted in **{days_until} days** if it remains inactive.")
                             else:
                                 print("Delete time not set")
                         
@@ -430,7 +438,9 @@ async def autoArchive():
                                     else:
                                         archiveIsFull = True
                 except Exception as e:
-                    await logChannel.send("Error in auto-archiving channels.")
+                    if not error:
+                        await logChannel.send("Error in auto-archiving channels.")
+                        error = True
                     print(e)
             
             if archiveIsFull:
@@ -479,5 +489,5 @@ async def on_message(message):
     except: # If an archive category doesn't exist, just process possible commands
         await bot.process_commands(message)
 
-autoArchive.start() # Start 24-hour auto-archiver
+# autoArchive.start() # Start 24-hour auto-archiver
 bot.run(TOKEN)
