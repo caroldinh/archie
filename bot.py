@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.4")
+activity = discord.Game(name="a!help | v.2.1.5")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -67,7 +67,7 @@ async def daysSinceActive(channel):
 
     message = await channel.fetch_message(channel.last_message_id)
     
-    time_since = round(await getTimeSince(message) / (60 * 60 * 24))
+    time_since = int((await getTimeSince(message) / (60 * 60 * 24)))
 
     return time_since
 
@@ -407,15 +407,15 @@ async def autoArchive():
 
                                 days_since = await daysSinceActive(channel) # Check days since last active
                                 
-                                if days_since + 2 > delete_time:
+                                if days_since + 2 >= delete_time:
                                 
-                                    if days_since > delete_time:
+                                    if days_since >= delete_time:
                                         await channel.delete()
                                         # pass
                                     
                                     else:
                                         days_until = delete_time - days_since
-                                        await logChannel.send(f"<#{channel.id}> will be deleted in **{days_until} days** if it remains inactive.")
+                                        await logChannel.send(f"<#{channel.id}> will be deleted in **{days_until} day(s)** if it remains inactive.")
                             else:
                                 print("Delete time not set")
                         

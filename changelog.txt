@@ -39,3 +39,6 @@
 2.1.4
     - Update deletion warning to report number of days until deletion
     - Remove unnecessary task loop
+
+2.1.5
+    - Edit some countdown and grammar errors in Archie's messages
