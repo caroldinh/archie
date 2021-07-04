@@ -42,3 +42,6 @@
 
 2.1.5
     - Edit some countdown and grammar errors in Archie's messages
+
+2.1.6
+    - Display channel name (and not just mention) in channel deletion warning
