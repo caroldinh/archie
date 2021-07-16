@@ -78,6 +78,7 @@ async def checkTimedOut(channel, timeout):
     return days_since > timeout
 
 def execute_query(connection, query):
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     connection.autocommit = True
     cursor = connection.cursor()
     try:
@@ -87,6 +88,7 @@ def execute_query(connection, query):
         print(f"The error '{e}' occurred")
 
 def execute_read_query(connection, query):
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     cursor = connection.cursor()
     result = None
     try:
@@ -109,7 +111,7 @@ def addServer(id, category, timeout):
     )
     """
 
-    execute_query(connection, create_servers_table)
+    # execute_query(connection, create_servers_table)
 
     servers = [(id, category, timeout, "", "", -1)]
 
@@ -146,7 +148,7 @@ def updateServer(id, key, newValue):
         WHERE id = {id}
     """)
 
-    execute_query(connection,  update_server)
+    execute_query(connection, update_server)
 
 
 ########## BOT FUNCTIONS ##########
@@ -269,7 +271,7 @@ async def config(ctx):
         
         id = ctx.message.guild.id
         if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
-            await ctx.message.channel.send("Category **" + cat_name + "** created.")
+            await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
             category = await ctx.message.guild.create_category(cat_name)
 
         # Save information to archives.txt
@@ -281,6 +283,9 @@ async def config(ctx):
     except asyncio.TimeoutError:
         await ctx.message.channel.send("Sorry, you took too long!")
         return None
+
+    except Exception as e:
+        print(e)
 
 @bot.command()
 @has_permissions(manage_guild=True)
@@ -321,7 +326,7 @@ async def archive(ctx):
     # Get designated archive category
     archive = getCategory(readServer(id)[1], ctx)
     if archive == None:
-        await ctx.message.channel.send("An archive category does not exist. Please use **a!setup** to create one.")
+        await ctx.message.channel.send("An archive category does not exist. Please use **a!config** to create one.")
     else:
         # Move to archive category if there is space in the archive
         if(len(archive.channels) < 50):
@@ -462,7 +467,7 @@ async def on_message(message):
 
         history = await ctx.message.channel.history(limit=2).flatten()
         previous_message = history[1]
-        print(previous_message)
+        #print(previous_message)
 
         # If the message is in a category and 
         # the category name is the archive and 
