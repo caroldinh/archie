@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.6")
+activity = discord.Game(name="a!help | v.2.1.7")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
