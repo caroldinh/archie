@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.1.7")
+activity = discord.Game(name="a!help | v.2.2.0")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -78,7 +78,6 @@ async def checkTimedOut(channel, timeout):
     return days_since > timeout
 
 def execute_query(connection, query):
-    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     connection.autocommit = True
     cursor = connection.cursor()
     try:
@@ -88,7 +87,6 @@ def execute_query(connection, query):
         print(f"The error '{e}' occurred")
 
 def execute_read_query(connection, query):
-    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     cursor = connection.cursor()
     result = None
     try:
@@ -113,10 +111,10 @@ def addServer(id, category, timeout):
 
     # execute_query(connection, create_servers_table)
 
-    servers = [(id, category, timeout, "", "", -1)]
+    servers = [(id, category, timeout)]
 
     insert_query = (
-        f"INSERT INTO servers (id, archive, timeout, permanent_categories, permanent_channels) VALUES ({id}, '{category}', {timeout}, '', '', -1)"
+        f"INSERT INTO servers (id, archive, timeout) VALUES ({id}, '{category}', {timeout})"
     )
 
     connection.autocommit = True
@@ -124,30 +122,38 @@ def addServer(id, category, timeout):
     try:
         cursor.execute(insert_query, servers)
     except:
-        updateServer(id, "archive", f"'{category}'")
-        updateServer(id, "timeout", timeout)
+        updateServer(id, archive=f"'{category}'", timeout=timeout)
 
 def readServer(id):
 
     select_server = (f"SELECT * FROM servers WHERE id={id}")
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     server = execute_read_query(connection, select_server)
 
     # print(server)
 
     if(len(server) > 0):
         return server[0]       # Returns a tuple where server[0] = id, server[1] = archive channel, server[2] = timeout, 
-                                # server[3] = permanent categories, server[4] = permanent channels, server[5] = deletion time
+                                # server[3] = permanent categories, server[4] = permanent channels (not yet used), server[5] = deletion time
     else:
         return None
 
-def updateServer(id, key, newValue):
+def updateServer(id, **kwargs):
 
-    update_server = (f"""
-        UPDATE servers
-        SET {key} = {newValue}
-        WHERE id = {id}
-    """)
+    update_server = "UPDATE servers\nSET "
+    count = 0
 
+    for key in kwargs:
+        update_server += f"{key} = {kwargs.get(key)}"
+        count += 1
+        if(count == len(kwargs)):
+            update_server += "\n"
+        else:
+            update_server += ",\n"
+
+    update_server += f"WHERE id = {id}"
+
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     execute_query(connection, update_server)
 
 
@@ -164,41 +170,49 @@ async def help(ctx):
 
     descrip = "Hi there! :wave: I'm Archie, a Discord bot that archives inactive channels.\n\n" + \
         "After you set me up, I will check on your server every day and archive channels that haven't been active for a while.\n\n" + \
-        "All of this is automatic, so you don't have to worry about calling on me too often, but here are some commands you can use yourself."
+        "All of this is automatic, so you don't have to worry about calling on me too often, but here are some commands you can use yourself.\n\n" + \
+        "Run **a!config** to get started.\n\n"
     embed = discord.Embed(title="Archie", description=descrip, color=0xff4912)
-    embed.add_field(name="a!config", value=":open_file_folder: Set archive category and channel timeout.", inline=False)
-    embed.add_field(name="a!archive (a!arch)", value=":open_file_folder: Manually archive the current channel.", inline=False)
-    embed.add_field(name="a!set <CATEGORY NAME>", value=":open_file_folder: Set the archive category. Ex: a!set archive", inline=False)
-    embed.add_field(name="a!timeout <TIME (DAYS)>", value=":open_file_folder: Set the channel timeout. Ex: a!timeout 30", inline=False)
-    embed.add_field(name="a!limit", value=":open_file_folder: Limit which categories and channels can be automatically archived.", inline=False)
-    embed.add_field(name="a!deleteafter <TIME (DAYS)>", value=":open_file_folder: Delete archived channels after they have been inactive for a set amount of time.", inline=False)
+    embed.add_field(name="`a!config`", value=":open_file_folder: Configure Archie on your server. You may also run `a!config <CATEGORY NAME> <TIME (DAYS)>` as a shortcut.", inline=False)
+    embed.add_field(name="`a!archive`", value=":open_file_folder: Manually archive the current channel. Type 'readonly' at the end of the command to make the channel read-only, i.e. `a!archive readonly`.", inline=False)
+    embed.add_field(name="`a!set <CATEGORY NAME>`", value=":open_file_folder: Set the archive category. Ex: a!set archive", inline=False)
+    embed.add_field(name="`a!timeout <TIME (DAYS)>`", value=":open_file_folder: Set the channel timeout. Ex: a!timeout 30", inline=False)
+    embed.add_field(name="`a!freeze`", value=":open_file_folder: 'Freeze' categories to prevent Archie from modifying them automatically.", inline=False)
+    embed.add_field(name="`a!delete <TIME (DAYS)>`", value=":open_file_folder: Delete archived channels after they have been inactive for a set amount of time. Read-only channels cannot be automatically deleted.", inline=False)
+    embed.add_field(name="`a!lock`", value=":open_file_folder: Make an archived channel read-only. Can be reversed with `a!unlock`.", inline=False)
+    embed.add_field(name="`a!info`", value=":open_file_folder: Display the configurations for this server.", inline=False)
     # embed.add_field(name="a!categories", value=" - List all categories in server.", inline=False)
-    embed.add_field(name="a!help", value=":open_file_folder: Display the help menu.\n\n" + \
+    embed.add_field(name="`a!help`", value=":open_file_folder: Display the help menu.\n\n" + \
         "You can restore an archived channel simply by sending a message in it.", inline=False)
 
     await ctx.message.channel.send(embed=embed)
 
-async def getCatList(ctx):
+async def getCatList(ctx, exclude_frozen):
 
     id = ctx.message.guild.id
 
     catList = []
     catDisplay = []
     count = 1
-    archive = readServer(id)[1]
+    server = readServer(id)
+    archive = server[1]
+    if(exclude_frozen):
+        frozen = server[3].split("\n")
+    else:
+        frozen = []
     for category in ctx.message.guild.categories:
-        if category.name != archive: # Exclude the archive category
+        if category.name != archive and not category.name in frozen: # Exclude the archive category and frozen categories
             catDisplay.append(f"[{count}] {category.name.upper()}")
             catList.append(category.name)
             count += 1
     return [catList, catDisplay]
 
-async def inputCat(ctx):
+async def inputCat(ctx, exclude_frozen=False):
 
     id = ctx.message.guild.id
 
     # Get list of all categories
-    result = await getCatList(ctx)
+    result = await getCatList(ctx, exclude_frozen)
     catList = result[0]
     catDisplay = result[1]
     
@@ -219,12 +233,12 @@ async def inputCat(ctx):
         await ctx.message.channel.send("Sorry, you took too long!")
         return None
 
-async def inputCatList(ctx):
+async def inputCatList(ctx, exclude_frozen=False):
 
     id = ctx.message.guild.id
 
     # Get list of all categories
-    result = await getCatList(ctx)
+    result = await getCatList(ctx, exclude_frozen)
     catList = result[0]
     catDisplay = result[1]
     
@@ -258,40 +272,62 @@ async def inputCatList(ctx):
 
 @bot.command()
 @has_permissions(manage_guild=True)
-async def config(ctx):
+async def config(ctx, *args):
 
-    # Get archive category name
-    await ctx.message.channel.send("What is the name of your archive category? (NOT case sensitive)")
-    try:
-        cat_name = (await bot.wait_for("message", check=isMessage, timeout=20.0)).content
+    if(len(args) == 0):
+        # Get archive category name
+        await ctx.message.channel.send("What is the name of your archive category? (NOT case sensitive)")
+        try:
+            cat_name = (await bot.wait_for("message", check=isMessage, timeout=20.0)).content
 
-        # Get timeout time
-        await ctx.message.channel.send("After how many days should channels be archived? (Must be a full number)")
-        timeout = (await bot.wait_for("message", check=isNumMessage, timeout=20.0)).content
+            # Get timeout time
+            await ctx.message.channel.send("After how many days should channels be archived? (Must be a full number)")
+            timeout = (await bot.wait_for("message", check=isNumMessage, timeout=20.0)).content
+            
+            id = ctx.message.guild.id
+            if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
+                await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
+                category = await ctx.message.guild.create_category(cat_name)
+
+            # Save information to archives.txt
+            # writeArchive(id, cat_name, timeout)
+            addServer(id, cat_name, timeout)
+            
+            await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
         
+        except asyncio.TimeoutError:
+            await ctx.message.channel.send("Sorry, you took too long!")
+            return None
+
+        except Exception as e:
+            print(e)
+
+    elif(len(args) == 2):
+
+        cat_name = args[0]
+        timeout = args[1]
         id = ctx.message.guild.id
         if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
             await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
             category = await ctx.message.guild.create_category(cat_name)
+        try:
+            addServer(id, cat_name, timeout)
+            await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
+        except Exception as e:
+            print(e)
+    else:
+        await ctx.message.channel.send("a!config takes either 0 arguments or 2. Example: `a!config archive 30` sets ARCHIVE as the archive category and 30 as the timeout in days. If you are unsure, `a!config` will walk you through the setup.")
 
-        # Save information to archives.txt
-        # writeArchive(id, cat_name, timeout)
-        addServer(id, cat_name, timeout)
-        
-        await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
-    
-    except asyncio.TimeoutError:
-        await ctx.message.channel.send("Sorry, you took too long!")
-        return None
 
-    except Exception as e:
-        print(e)
 
 @bot.command()
 @has_permissions(manage_guild=True)
 async def set(ctx, cat_name):
     id = ctx.message.guild.id
-    updateServer(id, "archive", f"'{cat_name}'")
+    if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
+        await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
+        category = await ctx.message.guild.create_category(cat_name)
+    updateServer(id, archive=f"'{cat_name}'")
     await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive.")
 
 @bot.command()
@@ -303,22 +339,64 @@ async def timeout(ctx, timeout):
 
 @bot.command()
 @has_permissions(manage_guild=True)
-async def limit(ctx):
+async def lock(ctx):
+    id = ctx.message.guild.id
+    if(getCategory(readServer(id)[1], ctx) == ctx.message.channel.category):
+        await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
+        await ctx.message.channel.send("This channel has been locked.")
+    else:
+        await ctx.message.channel.send("`a!lock` can only be run on archived channels.")
+
+@bot.command()
+@has_permissions(manage_guild=True)
+async def unlock(ctx):
+    overwrite = ctx.message.channel.overwrites_for(ctx.message.guild.default_role)
+    if(overwrite.send_messages == False):
+        await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
+        await ctx.message.channel.send("This channel has been unlocked.")
+    else:
+        await ctx.message.channel.send("This channel is already unlocked.")
+
+@bot.command()
+@has_permissions(manage_guild=True)
+async def freeze(ctx):
 
     id = ctx.message.guild.id
 
-    await ctx.message.channel.send("List which categories should NOT be automatically archived.")
+    await ctx.message.channel.send("List which categories to freeze.")
 
     cats = await inputCatList(ctx)
     if cats:
         cats = "\n".join(cats)
-        updateServer(id, "permanent_categories", f"'{cats}'")
-        await ctx.message.channel.send(f"The following categories will NOT be automatically archived:\n**{cats.upper()}**")
+        updateServer(id, permanent_categories=f"'{cats}'")
+        await ctx.message.channel.send(f"The following categories will NOT be automatically modified by Archie (you may still manually archive channels in this category using `a!arch`):\n**{cats.upper()}**")
+
+@bot.command(aliases=['stats', 'data'])
+async def info(ctx):
+    id = ctx.message.guild.id
+    server = readServer(id)
+
+    if(server == None):
+        print("None")
+        server = ["None", "None", "None", "None", "None", "None"]
+
+    embed = discord.Embed(title=f"Archie Configuration Information", description=f"Archie's configuration info for **{ctx.message.guild.name}.**", color=0xff4912)
+    embed.add_field(name="`Archive`", value=f"{server[1]}\n*- Archived channels are moved to the category **{server[1].upper()}**.*", inline=False)
+    embed.add_field(name="`Archive Timeout`", value=f"{server[2]}\n*- Channels are archived after **{server[2]} days** of inactivity.*", inline=False)
+    embed.add_field(name="`Deletion Timeout`", value=f"{server[5]}\n*- Channels are deleted from the archive after **{server[5]} days** of inactivity.*", inline=False)
+    embed.add_field(name="`Frozen`", value=f"{server[3]}\n*- These categories cannot be modified.*\n\nIf any value is 'None', that means you have not configured it yet.", inline=False)
+
+    await ctx.message.channel.send(embed=embed)
+
 
 # Manually archive a channel
-@bot.command()
+@bot.command(aliases=['arch'])
 @has_permissions(manage_guild=True)
-async def archive(ctx):
+async def archive(ctx, readonly=None):
+
+    print(readonly)
+    if str(readonly).lower() == "readonly":
+        readonly = True
 
     id = ctx.message.guild.id
     # print("Archiving...")
@@ -332,29 +410,19 @@ async def archive(ctx):
         if(len(archive.channels) < 50):
             await ctx.message.channel.edit(category=archive)
             await ctx.message.channel.send("This channel has been archived.")
+            if(readonly == True):
+                await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
+                await ctx.message.channel.send("This channel is now read-only.")
         else:
            await ctx.message.channel.send(f"Your archive channel **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
 
-# Shortened version of archive
 @bot.command()
 @has_permissions(manage_guild=True)
-async def arch(ctx):
-    await archive(ctx)
-
-'''
-# Empty archive
-@bot.command()
-@has_permissions(manage_guild=True)
-async def empty(ctx, days):
-    await archive(ctx)
-'''
-@bot.command()
-@has_permissions(manage_guild=True)
-async def deleteafter(ctx, days):
+async def delete(ctx, days):
     id = ctx.message.guild.id
     timeout = readServer(id)[2]
     if(int(days) >= timeout + 7):
-        updateServer(id, "delete_time", int(days))
+        updateServer(id, delete_time=int(days))
         await ctx.message.channel.send(f"Archived channels inactive for **{days}** days will be deleted.")
     else:
         await ctx.message.channel.send(f"Deletion time must be greater than {timeout+7}.")
@@ -364,8 +432,10 @@ async def deleteafter(ctx, days):
 @archive.error
 @set.error
 @timeout.error
-@limit.error
-@deleteafter.error
+@freeze.error
+@delete.error
+@lock.error
+@unlock.error
 async def permissions_error(ctx, error):
     if isinstance(error, MissingPermissions):
         await ctx.message.channel.send("You don't have permission to do this!")
@@ -404,10 +474,12 @@ async def autoArchive():
             # Go through every text channel
             for channel in guild.channels:
                
-                try:
-                    if(not archiveIsFull and str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories))):
+                try:    # If the channel is in a text channel that is not frozen
+                    if(str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories))):
 
-                        if(channel.category != None and channel.category.name == server[1]):
+                        # Code to delete inactive channels
+                        overwrite = channel.overwrites_for(guild.default_role)
+                        if(channel.category != None and channel.category.name == server[1] and overwrite.send_messages == True): # If the channel is in the archive and is not readonly
                             if(delete_time != None and delete_time > timeout): # Check if a delete time has been set
 
                                 days_since = await daysSinceActive(channel) # Check days since last active
@@ -424,7 +496,8 @@ async def autoArchive():
                             else:
                                 print("Delete time not set")
                         
-                        else: 
+                        # Code to archive inactive channels if channel is not full
+                        elif not archiveIsFull: 
                             inactive = await checkTimedOut(channel, timeout)
                             if inactive:
 
@@ -471,23 +544,27 @@ async def on_message(message):
 
         # If the message is in a category and 
         # the category name is the archive and 
-        # the message was sent by the user and 
-        # the message is not a response to the bot 
+        # the message was sent by the user and the message is not a response to the bot 
+        # And the message is not a command
             # assuming the response has not timed out
 
         if message.channel.category != None and \
         message.channel.category.name == archive.name and \
         message.author != bot.user and \
-        (previous_message.author != bot.user or \
-        await getTimeSince(previous_message) >= 20):
+        (previous_message.author != bot.user or await getTimeSince(previous_message) >= 20) and \
+        message.content[:2] != "a!":
 
             await message.channel.send("This channel has been archived! Which category would you like to restore it to?")
 
             # Get the category we want to restore the channel to and move channel
-            cat_name = await inputCat(ctx)
+            cat_name = await inputCat(ctx, True)
             if cat_name:
                 await message.channel.edit(category=getCategory(cat_name, ctx))
                 await message.channel.send("Channel restored to **" + cat_name.upper() + "**.")
+            
+            overwrite = message.channel.overwrites_for(message.guild.default_role)
+            if(overwrite.send_messages == False):
+                await message.channel.send("Run `a!unlock` to unlock this channel.")
         
         await bot.process_commands(message) # Process commands
     

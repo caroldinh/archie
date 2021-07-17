@@ -46,6 +46,12 @@
 2.1.6
     - Display channel name (and not just mention) in channel deletion warning
 
-2.1.6.
+2.1.7
     - Fix error with a!config
     - Correct some messaging errors
+
+2.2.0
+    - Add optional arguments to a!config
+    - Use kwargs with readServer()
+    - Add lock/unlock feature for readonly channels
+    - Change limit to freeze
