@@ -482,7 +482,7 @@ async def autoArchive():
             if permanent_categories:
                 permanent_categories = permanent_categories.split("\n")
             else:
-                permanent_categories = None
+                permanent_categories = []
             timeout = server[2]
             delete_time = server[5]
 
