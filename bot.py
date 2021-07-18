@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.0")
+activity = discord.Game(name="a!help | v.2.2.1")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -152,7 +152,6 @@ def updateServer(id, **kwargs):
             update_server += ",\n"
 
     update_server += f"WHERE id = {id}"
-
     connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     execute_query(connection, update_server)
 
@@ -197,7 +196,11 @@ async def getCatList(ctx, exclude_frozen):
     server = readServer(id)
     archive = server[1]
     if(exclude_frozen):
-        frozen = server[3].split("\n")
+        frozen = server[3]
+        if(frozen == None):
+            frozen = []
+        else:
+            frozen = frozen.split("\n")
     else:
         frozen = []
     for category in ctx.message.guild.categories:
@@ -243,7 +246,7 @@ async def inputCatList(ctx, exclude_frozen=False):
     catDisplay = result[1]
     
     # Display this in an embed
-    descrip = f"Enter list of numbers 1-{len(catList)} separated by spaces, i.e., \"1 2 3\".\n\n" + "\n".join(catDisplay)
+    descrip = f"Enter list of numbers 1-{len(catList)} separated by spaces, i.e., \"1 2 3\", or type \"0\" to select nothing.\n\n" + "\n".join(catDisplay)
     embed = discord.Embed(title="Categories", description=descrip, color=0xff4912)
     await ctx.message.channel.send(embed=embed)
 
@@ -253,8 +256,9 @@ async def inputCatList(ctx, exclude_frozen=False):
     def check(message):
         message = message.content.split()
         for m in message:
-            # print(m)
-            if(not(m.isnumeric() and int(m) > 0 and int(m) <= len(catList))):
+            #print(m)
+            if(not(m.isnumeric() and int(m) >= 0 and int(m) <= len(catList))):
+                # print("False")
                 return False
         return True
 
@@ -262,8 +266,13 @@ async def inputCatList(ctx, exclude_frozen=False):
         cats = (await bot.wait_for("message", check=check, timeout=20.0)).content
         cats = cats.split()
         categories = []
+        # print("Len:",len(cats))
+        if(len(cats) == 1 and int(cats[0]) == 0):
+            # print("0")
+            return []
         for c in cats:
-            categories.append(catList[int(c) - 1])
+            if(int(c) != 0):
+                categories.append(catList[int(c) - 1])
         # print(categories)
         return categories
     except asyncio.TimeoutError:
@@ -366,10 +375,14 @@ async def freeze(ctx):
     await ctx.message.channel.send("List which categories to freeze.")
 
     cats = await inputCatList(ctx)
-    if cats:
+    if cats != []:
         cats = "\n".join(cats)
         updateServer(id, permanent_categories=f"'{cats}'")
         await ctx.message.channel.send(f"The following categories will NOT be automatically modified by Archie (you may still manually archive channels in this category using `a!arch`):\n**{cats.upper()}**")
+    else:
+        # print("Setting to none")
+        updateServer(id, permanent_categories='NULL')
+        await ctx.message.channel.send(f"No categories were selected. All categories may now be automatically modified by Archie.")
 
 @bot.command(aliases=['stats', 'data'])
 async def info(ctx):
@@ -465,7 +478,11 @@ async def autoArchive():
 
         if(server != None and len(server) > 1): # If that server is in the database
 
-            permanent_categories = server[3].split("\n")
+            permanent_categories = server[3]
+            if permanent_categories:
+                permanent_categories = permanent_categories.split("\n")
+            else:
+                permanent_categories = None
             timeout = server[2]
             delete_time = server[5]
 
