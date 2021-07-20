@@ -58,3 +58,6 @@
 
 2.2.1:
     - Bug fix: categories weren't displaying when permanent_categories == 0
+
+2.2.2: 
+    - Fix lag for message responsiveness immediately after archiving

@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.1")
+activity = discord.Game(name="a!help | v.2.2.2")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -561,14 +561,24 @@ async def on_message(message):
 
         # If the message is in a category and 
         # the category name is the archive and 
-        # the message was sent by the user and the message is not a response to the bot 
+        # the message was sent by the user and
+        # the message is not a response to the bot (if the user sends a message after the bot, the message must not be a question or an embed)
+        # or, if it is a response to the bot, the question has timed out
         # And the message is not a command
-            # assuming the response has not timed out
+
+        # print(previous_message.embeds)
+
+        previous_content = previous_message.content
+
+        if(len(previous_message.embeds) != 0):
+            previous_content = previous_message.embeds[0].description
 
         if message.channel.category != None and \
         message.channel.category.name == archive.name and \
         message.author != bot.user and \
-        (previous_message.author != bot.user or await getTimeSince(previous_message) >= 20) and \
+        (previous_message.author != bot.user or 
+        (previous_message.author == bot.user and not "?" in previous_content and not "enter" in previous_content.lower()) 
+        or await getTimeSince(previous_message) >= 20) and \
         message.content[:2] != "a!":
 
             await message.channel.send("This channel has been archived! Which category would you like to restore it to?")
