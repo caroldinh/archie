@@ -15,7 +15,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.2")
+activity = discord.Game(name="a!help | v.2.2.3")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -182,7 +182,8 @@ async def help(ctx):
     embed.add_field(name="`a!info`", value=":open_file_folder: Display the configurations for this server.", inline=False)
     # embed.add_field(name="a!categories", value=" - List all categories in server.", inline=False)
     embed.add_field(name="`a!help`", value=":open_file_folder: Display the help menu.\n\n" + \
-        "You can restore an archived channel simply by sending a message in it.", inline=False)
+        "You can restore an archived channel simply by sending a message in it.\n\n" + \
+        "For more information, visit Archie on Top.gg: https://top.gg/bot/857027766976118806", inline=False)
 
     await ctx.message.channel.send(embed=embed)
 
@@ -347,7 +348,7 @@ async def timeout(ctx, timeout):
     await ctx.message.channel.send(f"Channels inactive for **{timeout}** days will be archived.")
 
 @bot.command()
-@has_permissions(manage_guild=True)
+@has_permissions(manage_channels=True)
 async def lock(ctx):
     id = ctx.message.guild.id
     if(getCategory(readServer(id)[1], ctx) == ctx.message.channel.category):
@@ -357,7 +358,7 @@ async def lock(ctx):
         await ctx.message.channel.send("`a!lock` can only be run on archived channels.")
 
 @bot.command()
-@has_permissions(manage_guild=True)
+@has_permissions(manage_channels=True)
 async def unlock(ctx):
     overwrite = ctx.message.channel.overwrites_for(ctx.message.guild.default_role)
     if(overwrite.send_messages == False):
@@ -404,7 +405,7 @@ async def info(ctx):
 
 # Manually archive a channel
 @bot.command(aliases=['arch'])
-@has_permissions(manage_guild=True)
+@has_permissions(manage_channels=True)
 async def archive(ctx, readonly=None):
 
     print(readonly)

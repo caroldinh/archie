@@ -61,3 +61,7 @@
 
 2.2.2: 
     - Fix lag for message responsiveness immediately after archiving
+
+2.2.3:
+    - Update help menu with top.gg link
+    - Update lock, unlock, and arch so that anyone with manage_channels permission can use
