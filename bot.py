@@ -10,12 +10,13 @@ from datetime import datetime, timezone
 import psycopg2
 from psycopg2 import OperationalError
 import asyncio
+from psycopg2 import sql
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.3")
+activity = discord.Game(name="a!help | v.2.2.4")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -111,18 +112,20 @@ def addServer(id, category, timeout):
 
     # execute_query(connection, create_servers_table)
 
-    servers = [(id, category, timeout)]
+    server = [id, category, timeout]
 
-    insert_query = (
-        f"INSERT INTO servers (id, archive, timeout) VALUES ({id}, '{category}', {timeout})"
-    )
+    insert_query = "INSERT INTO servers (id, archive, timeout) VALUES (%s, %s, %s)"
 
+    print(insert_query)
+
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     connection.autocommit = True
     cursor = connection.cursor()
     try:
-        cursor.execute(insert_query, servers)
-    except:
-        updateServer(id, archive=f"'{category}'", timeout=timeout)
+        cursor.execute(insert_query, server)
+    except Exception as e:
+        print(f"The error '{e}' occurred")
+        updateServer(id, archive=category, timeout=timeout)
 
 def readServer(id):
 
@@ -140,11 +143,33 @@ def readServer(id):
 
 def updateServer(id, **kwargs):
 
+    print("Updating Server")
+
     update_server = "UPDATE servers\nSET "
     count = 0
 
+    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
+
+    new_values = []
+    
     for key in kwargs:
-        update_server += f"{key} = {kwargs.get(key)}"
+    
+        #print(key)
+
+        if(key == "archive"):
+            update_server += "archive = %s"
+        elif(key=="timeout"):
+            update_server += "timeout = %s"
+        elif(key=="permanent_categories"):
+            if(kwargs.get(key) != 'NULL'):
+                update_server += "permanent_categories = %s"
+            else:
+                update_server += "permanent_categories = NULL"
+        elif(key=="delete_time"):
+            update_server += "delete_time = %s"
+
+        new_values.append(kwargs.get(key))
+
         count += 1
         if(count == len(kwargs)):
             update_server += "\n"
@@ -152,8 +177,15 @@ def updateServer(id, **kwargs):
             update_server += ",\n"
 
     update_server += f"WHERE id = {id}"
-    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
-    execute_query(connection, update_server)
+    # print(update_server)
+
+    connection.autocommit = True
+    cursor = connection.cursor()
+    try:
+        cursor.execute(update_server, new_values)
+        print("Query executed successfully")
+    except OperationalError as e:
+        print(f"The error '{e}' occurred")
 
 
 ########## BOT FUNCTIONS ##########
@@ -301,6 +333,7 @@ async def config(ctx, *args):
 
             # Save information to archives.txt
             # writeArchive(id, cat_name, timeout)
+
             addServer(id, cat_name, timeout)
             
             await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
@@ -316,15 +349,19 @@ async def config(ctx, *args):
 
         cat_name = args[0]
         timeout = args[1]
-        id = ctx.message.guild.id
-        if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
-            await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
-            category = await ctx.message.guild.create_category(cat_name)
-        try:
-            addServer(id, cat_name, timeout)
-            await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
-        except Exception as e:
-            print(e)
+
+        if(not timeout.isnumeric() or '.' in timeout):
+            await ctx.message.channel.send("Your second argument must be an integer.")
+        else:
+            id = ctx.message.guild.id
+            if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
+                await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
+                category = await ctx.message.guild.create_category(cat_name)
+            try:
+                addServer(id, cat_name, timeout)
+                await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive. Channels inactive for **" + timeout + "** days will be moved to **" + cat_name.upper() + "**.")
+            except Exception as e:
+                print(e)
     else:
         await ctx.message.channel.send("a!config takes either 0 arguments or 2. Example: `a!config archive 30` sets ARCHIVE as the archive category and 30 as the timeout in days. If you are unsure, `a!config` will walk you through the setup.")
 
@@ -337,7 +374,7 @@ async def set(ctx, cat_name):
     if getCategory(cat_name, ctx) == None: # If the archive category does not yet exist, create it
         await ctx.message.channel.send("Category **" + cat_name.upper() + "** created.")
         category = await ctx.message.guild.create_category(cat_name)
-    updateServer(id, archive=f"'{cat_name}'")
+    updateServer(id, archive=cat_name)
     await ctx.message.channel.send("Category **" + cat_name.upper() + "** set as server archive.")
 
 @bot.command()
@@ -378,7 +415,7 @@ async def freeze(ctx):
     cats = await inputCatList(ctx)
     if cats != []:
         cats = "\n".join(cats)
-        updateServer(id, permanent_categories=f"'{cats}'")
+        updateServer(id, permanent_categories=cats)
         await ctx.message.channel.send(f"The following categories will NOT be automatically modified by Archie (you may still manually archive channels in this category using `a!arch`):\n**{cats.upper()}**")
     else:
         # print("Setting to none")
@@ -557,9 +594,9 @@ async def on_message(message):
         archive = getCategory(readServer(id)[1], ctx)
 
         history = await ctx.message.channel.history(limit=2).flatten()
-        previous_message = history[1]
-        #print(previous_message)
-
+        previous_message = None
+        if(len(history) > 1):
+            previous_message = history[1]
         # If the message is in a category and 
         # the category name is the archive and 
         # the message was sent by the user and
@@ -569,17 +606,19 @@ async def on_message(message):
 
         # print(previous_message.embeds)
 
-        previous_content = previous_message.content
+        if previous_message:
+            previous_content = previous_message.content
 
-        if(len(previous_message.embeds) != 0):
-            previous_content = previous_message.embeds[0].description
+            if(len(previous_message.embeds) != 0):
+                previous_content = previous_message.embeds[0].description
 
         if message.channel.category != None and \
         message.channel.category.name == archive.name and \
         message.author != bot.user and \
-        (previous_message.author != bot.user or 
-        (previous_message.author == bot.user and not "?" in previous_content and not "enter" in previous_content.lower()) 
-        or await getTimeSince(previous_message) >= 20) and \
+        (previous_message == None or \
+        (previous_message.author != bot.user or \
+        (previous_message.author == bot.user and not "?" in previous_content and not "enter" in previous_content.lower()) or \
+        await getTimeSince(previous_message) >= 20)) and \
         message.content[:2] != "a!":
 
             await message.channel.send("This channel has been archived! Which category would you like to restore it to?")

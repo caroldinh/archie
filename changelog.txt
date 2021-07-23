@@ -65,3 +65,6 @@
 2.2.3:
     - Update help menu with top.gg link
     - Update lock, unlock, and arch so that anyone with manage_channels permission can use
+
+2.2.4:
+    - Improve input validation
