@@ -16,7 +16,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.5")
+activity = discord.Game(name="a!help | v.2.2.6")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -416,6 +416,14 @@ async def setTimeout(ctx, timeout):
     updateServer(id, timeout=timeout)
     await ctx.message.channel.send(f"Channels inactive for **{timeout}** days will be archived.")
 
+# @bot.command()
+@has_permissions(manage_guild=True)
+async def pin(ctx):
+    perms = ctx.channel.overwrites_for(ctx.guild.default_role)
+    perms.manage_channels=False
+    await ctx.channel.set_permissions(bot.user, overwrite=perms)
+    await ctx.message.channel.send("This channel can no longer be archived.")
+
 @bot.command()
 @has_permissions(manage_channels=True)
 async def lock(ctx):
@@ -606,9 +614,11 @@ async def autoArchive():
                                     else:
                                         archiveIsFull = True
                 except Exception as e:
-                    if not error:
-                        await logChannel.send("Error in archiving channels. Please set up an archive category and a timeout with `a!config`.")
-                        error = True
+                    # await logChannel.send("Error in archiving channels. Please set up an archive category and a timeout with `a!config`.")
+                    if not isinstance(e, MissingPermissions):
+                        if not error:
+                            await logChannel.send("Error in archiving channels. Please set up an archive category and a timeout with `a!config`.")
+                            error = True
                     print(e)
             
             if archiveIsFull:

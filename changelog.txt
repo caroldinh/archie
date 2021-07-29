@@ -69,7 +69,10 @@
 2.2.4:
     - Improve input validation
 
-2.2.5
+2.2.5:
     - Consolidate a!set and a!timeout into a!config
     - Fix logical error with deletion timeout being less than inactivity timeout
     - Allow users to remove deletion timeout with a!delete 0
+
+2.2.6
+    - Remove permissions error message for channels that Archie cannot manage
