@@ -1,4 +1,4 @@
-# Bot permissions: manage channels, view channels, send messages, read message history
+# Bot permissions: manage channels, view channels, send messages, read message history - value: 68624
 
 import os
 import discord
@@ -16,7 +16,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.6")
+activity = discord.Game(name="a!help | v.2.2.7")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -567,24 +567,34 @@ async def autoArchive():
             timeout = server[2]
             delete_time = server[5]
 
+            #print(timeout, delete_time)
+
             error = False
 
             # Go through every text channel
             for channel in guild.channels:
+
                
                 try:    # If the channel is in a text channel that is not frozen
                     if(str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories))):
 
                         # Code to delete inactive channels
                         overwrite = channel.overwrites_for(guild.default_role)
-                        if(channel.category != None and channel.category.name == server[1] and overwrite.send_messages == True): # If the channel is in the archive and is not readonly
+                        # print(channel.name, overwrite.send_messages)
+                        if(channel.category != None and channel.category.name == server[1] and not overwrite.send_messages == False): # If the channel is in the archive and is not readonly
+
                             if(delete_time != None and delete_time > timeout): # Check if a delete time has been set
 
                                 days_since = await daysSinceActive(channel) # Check days since last active
+
+                                #print(days_since, delete_time)
                                 
                                 if days_since + 2 >= delete_time:
                                 
                                     if days_since >= delete_time:
+
+                                        # print(days_since)
+                                        # print(delete_time)
                                         await channel.delete()
                                         # pass
                                     

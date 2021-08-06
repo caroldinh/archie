@@ -74,5 +74,8 @@
     - Fix logical error with deletion timeout being less than inactivity timeout
     - Allow users to remove deletion timeout with a!delete 0
 
-2.2.6
+2.2.6:
     - Remove permissions error message for channels that Archie cannot manage
+
+2.2.7:
+    - Bug fix: fixed logical error, timed out categories in archive were not being deleted.
