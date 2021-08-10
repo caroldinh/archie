@@ -419,10 +419,16 @@ async def setTimeout(ctx, timeout):
 # @bot.command()
 @has_permissions(manage_guild=True)
 async def pin(ctx):
-    perms = ctx.channel.overwrites_for(ctx.guild.default_role)
-    perms.manage_channels=False
-    await ctx.channel.set_permissions(bot.user, overwrite=perms)
-    await ctx.message.channel.send("This channel can no longer be archived.")
+    bot_member = ctx.message.guild.get_member(bot.user.id)
+    bot_role = bot_member.roles[0]
+    if(not bot_role.is_bot_managed()):
+        for role in bot_member.roles:
+            if(role.is_bot_managed()):
+                bot_role = role
+    permissions = ctx.message.channel.overwrites_for(bot_role)
+    permissions.manage_channels=False
+    await ctx.channel.set_permissions(bot.user, overwrite=permissions)
+    await ctx.message.channel.send("This channel can no longer be automatically archived.")
 
 @bot.command()
 @has_permissions(manage_channels=True)
@@ -574,9 +580,17 @@ async def autoArchive():
             # Go through every text channel
             for channel in guild.channels:
 
+                # Check if Archie has the permissions to manage this channel
+                bot_member = guild.get_member(bot.user.id)
+                bot_role = bot_member.roles[0]
+                if(not bot_role.is_bot_managed()):
+                    for role in bot_member.roles:
+                        if(role.is_bot_managed()):
+                            bot_role = role
+                permissions = channel.overwrites_for(bot_role).manage_channels
                
                 try:    # If the channel is in a text channel that is not frozen
-                    if(str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories))):
+                    if(permissions != False and str(channel.type) == 'text' and (channel.category == None or not (channel.category.name in permanent_categories))):
 
                         # Code to delete inactive channels
                         overwrite = channel.overwrites_for(guild.default_role)
@@ -602,7 +616,8 @@ async def autoArchive():
                                         days_until = delete_time - days_since
                                         await logChannel.send(f"**{channel.name}** (<#{channel.id}>) will be deleted in **{days_until} day(s)** if it remains inactive.")
                             else:
-                                print("Delete time not set")
+                                pass
+                                # print("Delete time not set")
                         
                         # Code to archive inactive channels if channel is not full
                         elif not archiveIsFull: 
@@ -624,10 +639,11 @@ async def autoArchive():
                                     else:
                                         archiveIsFull = True
                 except Exception as e:
+                    print(channel.name)
                     # await logChannel.send("Error in archiving channels. Please set up an archive category and a timeout with `a!config`.")
-                    if not isinstance(e, MissingPermissions):
+                    if not isinstance(e, discord.errors.Forbidden):
                         if not error:
-                            await logChannel.send("Error in archiving channels. Please set up an archive category and a timeout with `a!config`.")
+                            await logChannel.send("Could not auto-archive. Please set up an archive category and a timeout with `a!config`.")
                             error = True
                     print(e)
             
