@@ -16,7 +16,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.7")
+activity = discord.Game(name="a!help | v.2.2.8")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -641,7 +641,7 @@ async def autoArchive():
                 except Exception as e:
                     print(channel.name)
                     # await logChannel.send("Error in archiving channels. Please set up an archive category and a timeout with `a!config`.")
-                    if not isinstance(e, discord.errors.Forbidden):
+                    if not isinstance(e, discord.errors.Forbidden) and not isinstance(e, discord.errors.NotFound):
                         if not error:
                             await logChannel.send("Could not auto-archive. Please set up an archive category and a timeout with `a!config`.")
                             error = True
