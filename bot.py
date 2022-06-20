@@ -233,7 +233,7 @@ async def clearSimple(ctx, message_count=2):
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    if (not DEBUG):
+    if (not DEBUG or DEBUG == '0'):
         await autoArchive()
         print("Autoarchive done")
 
