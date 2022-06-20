@@ -86,3 +86,6 @@
 2.3.0:
     - Add feature: Archie will delete some commands and responses to clean up clutter
     - Locked channels restored from archive are automatically unlocked
+
+2.3.1:
+    - Bug fix: send "archive full" message was not awaited during auto-archive

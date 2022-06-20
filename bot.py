@@ -19,7 +19,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.3.0")
+activity = discord.Game(name="a!help | v.2.3.1")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -676,7 +676,7 @@ async def autoArchive():
                     print(e)
             
             if archiveIsFull:
-                    logChannel.send(f"Your archive category **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
+                    await logChannel.send(f"Your archive category **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
 
 
 @bot.event
