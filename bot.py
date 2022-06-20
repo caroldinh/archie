@@ -12,11 +12,14 @@ from psycopg2 import OperationalError
 import asyncio
 from psycopg2 import sql
 
+
+DEBUG = os.getenv('DEBUG')
+
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.2.8")
+activity = discord.Game(name="a!help | v.2.3.0")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -45,7 +48,7 @@ def isMessage(message):
 def isNumMessage(message):
     return isMessage(message) and message.content.isnumeric()
 
-async def getTimeSince(message):
+def getTimeSince(message):
 
     id = message.guild.id
     timestamp = message.created_at
@@ -68,7 +71,7 @@ async def daysSinceActive(channel):
 
     message = await channel.fetch_message(channel.last_message_id)
     
-    time_since = int((await getTimeSince(message) / (60 * 60 * 24)))
+    time_since = int((getTimeSince(message) / (60 * 60 * 24)))
 
     return time_since
 
@@ -136,8 +139,6 @@ def readServer(id):
     connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     server = execute_read_query(connection, select_server)
 
-    # print(server)
-
     if(len(server) > 0):
         return server[0]       # Returns a tuple where server[0] = id, server[1] = archive channel, server[2] = timeout, 
                                 # server[3] = permanent categories, server[4] = permanent channels (not yet used), server[5] = deletion time
@@ -145,8 +146,6 @@ def readServer(id):
         return None
 
 def updateServer(id, **kwargs):
-
-    print("Updating Server")
 
     update_server = "UPDATE servers\nSET "
     count = 0
@@ -157,8 +156,6 @@ def updateServer(id, **kwargs):
     
     for key in kwargs:
     
-        #print(key)
-
         if(key == "archive"):
             update_server += "archive = %s"
         elif(key=="timeout"):
@@ -186,7 +183,6 @@ def updateServer(id, **kwargs):
             update_server += ",\n"
 
     update_server += f"WHERE id = {id}"
-    # print(update_server)
 
     connection.autocommit = True
     cursor = connection.cursor()
@@ -196,14 +192,50 @@ def updateServer(id, **kwargs):
     except OperationalError as e:
         print(f"The error '{e}' occurred")
 
+async def clearMessages(ctx, delete_from, delete_until):
+
+    print("Starting clear")
+    if (delete_from == None):
+        history = await ctx.message.channel.history(limit=1).flatten()
+        if(len(history) > 0):
+            delete_from = history[0]
+
+    # Wait 3 seconds before starting to delete
+    await asyncio.sleep(3)
+    start_found = False
+    previous_message = -1
+    messages_to_skip = 0
+    
+    while (previous_message != None and previous_message != delete_until):
+        history = await ctx.message.channel.history(limit=(1 + messages_to_skip)).flatten()
+        if(len(history) > 0):
+            previous_message = history[-1]
+            if (not start_found and previous_message == delete_from):
+                start_found = True
+            elif (not start_found):
+                messages_to_skip += 1
+            if(getTimeSince(previous_message) > getTimeSince(delete_until)):
+                previous_message = None
+            else:
+                if (start_found): # Do nothing until you've reached delete_from
+                    await previous_message.delete()
+        else:
+            previous_message = None
+
+async def clearSimple(ctx, message_count=2):
+    history = await ctx.message.channel.history(limit=message_count).flatten()
+    await asyncio.sleep(3)
+    for message in history:
+        await message.delete()
 
 ########## BOT FUNCTIONS ##########
 
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    await autoArchive()
-    print("Autoarchive done")
+    if (not DEBUG):
+        await autoArchive()
+        print("Autoarchive done")
 
 @bot.command()
 async def help(ctx):
@@ -290,15 +322,11 @@ async def inputCatList(ctx, exclude_frozen=False):
     embed = discord.Embed(title="Categories", description=descrip, color=0xff4912)
     await ctx.message.channel.send(embed=embed)
 
-    # print(catList)
-
     # Get input from user
     def check(message):
         message = message.content.split()
         for m in message:
-            #print(m)
             if(not(m.isnumeric() and int(m) >= 0 and int(m) <= len(catList))):
-                # print("False")
                 return False
         return True
 
@@ -306,18 +334,16 @@ async def inputCatList(ctx, exclude_frozen=False):
         cats = (await bot.wait_for("message", check=check, timeout=20.0)).content
         cats = cats.split()
         categories = []
-        # print("Len:",len(cats))
         if(len(cats) == 1 and int(cats[0]) == 0):
-            # print("0")
             return []
         for c in cats:
             if(int(c) != 0):
                 categories.append(catList[int(c) - 1])
-        # print(categories)
         return categories
     except asyncio.TimeoutError:
         await ctx.message.channel.send("Sorry, you took too long!")
         return None
+    
 
 @bot.command()
 @has_permissions(manage_guild=True)
@@ -325,7 +351,7 @@ async def config(ctx, *args):
 
     if(len(args) == 0):
         # Get archive category name
-        await ctx.message.channel.send("What is the name of your archive category? (NOT case sensitive)")
+        delete_until = await ctx.message.channel.send("What is the name of your archive category? (NOT case sensitive)")
         try:
             cat_name = (await bot.wait_for("message", check=isMessage, timeout=20.0)).content
 
@@ -361,6 +387,7 @@ async def config(ctx, *args):
         if(arg.isnumeric()):
             if(readServer(id) == None):
                 await ctx.message.channel.send("Please set an archive category before setting a timeout.")
+                await clearSimple(ctx)
             else:
                 arg = int(arg)
                 await setTimeout(ctx, arg)
@@ -377,6 +404,7 @@ async def config(ctx, *args):
 
         if(not timeout.isnumeric()):
             await ctx.message.channel.send("Your second argument must be a number.")
+            await clearSimple(ctx)
         else:
             timeout = str(int(timeout))
             id = ctx.message.guild.id
@@ -391,15 +419,14 @@ async def config(ctx, *args):
                 print(e)
     else:
         await ctx.message.channel.send("a!config takes either 0 arguments or 2. Example: `a!config archive 30` sets ARCHIVE as the archive category and 30 as the timeout in days. If you are unsure, `a!config` will walk you through the setup.")
+        await clearSimple(ctx)
 
 async def updateDeleteTime(ctx):
-    # print("Updating delete time")
     id = ctx.message.guild.id
     server = readServer(id)
     timeout = server[2]
     delete_time = server[5]
     if(delete_time and delete_time < timeout + 7):
-        # print("Delete time too large")
         updateServer(id, delete_time=(timeout+7))
         await ctx.message.channel.send(f"Deletion timeout changed from **{delete_time}** to **{timeout+7}**. Use `a!delete` to update.")
 
@@ -439,6 +466,7 @@ async def lock(ctx):
         await ctx.message.channel.send("This channel has been locked.")
     else:
         await ctx.message.channel.send("`a!lock` can only be run on archived channels.")
+        await clearSimple(ctx)
 
 @bot.command()
 @has_permissions(manage_channels=True)
@@ -449,6 +477,7 @@ async def unlock(ctx):
         await ctx.message.channel.send("This channel has been unlocked.")
     else:
         await ctx.message.channel.send("This channel is already unlocked.")
+        await clearSimple(ctx)
 
 @bot.command()
 @has_permissions(manage_guild=True)
@@ -456,16 +485,18 @@ async def freeze(ctx):
 
     id = ctx.message.guild.id
 
-    await ctx.message.channel.send("List which categories to freeze.")
+    delete_until = await ctx.message.channel.send("List which categories to freeze.")
 
     cats = await inputCatList(ctx)
     if cats != []:
         cats = "\n".join(cats)
         updateServer(id, permanent_categories=cats)
+
+        await clearMessages(ctx, None, delete_until)
         await ctx.message.channel.send(f"The following categories will NOT be automatically modified by Archie (you may still manually archive channels in this category using `a!arch`):\n**{cats.upper()}**")
     else:
-        # print("Setting to none")
         updateServer(id, permanent_categories='NULL')
+        await clearMessages(ctx, None, delete_until)
         await ctx.message.channel.send(f"No categories were selected. All categories may now be automatically modified by Archie.")
 
 @bot.command(aliases=['stats', 'data'])
@@ -491,27 +522,30 @@ async def info(ctx):
 @has_permissions(manage_channels=True)
 async def archive(ctx, readonly=None):
 
-    print(readonly)
     if str(readonly).lower() == "readonly":
         readonly = True
 
     id = ctx.message.guild.id
-    # print("Archiving...")
 
     # Get designated archive category
     archive = getCategory(readServer(id)[1], ctx)
     if archive == None:
         await ctx.message.channel.send("An archive category does not exist. Please use **a!config** to create one.")
+        await clearSimple(ctx)
     else:
         # Move to archive category if there is space in the archive
         if(len(archive.channels) < 50):
             await ctx.message.channel.edit(category=archive)
             await ctx.message.channel.send("This channel has been archived.")
+            message_count = 2
             if(readonly == True):
                 await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
                 await ctx.message.channel.send("This channel is now read-only.")
+                message_count = 3
+            await clearSimple(ctx, message_count)
         else:
            await ctx.message.channel.send(f"Your archive category **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
+           await clearSimple(ctx)
 
 @bot.command()
 @has_permissions(manage_guild=True)
@@ -519,7 +553,7 @@ async def delete(ctx, days):
     id = ctx.message.guild.id
     timeout = readServer(id)[2]
     if not timeout:
-        await ctx.message.channel.send("Please set an inactivity timeout with `a!config` before setting a deletion timeout")
+        await ctx.message.channel.send("Please set an inactivity timeout with `a!config` before setting a deletion timeout.")
     elif(int(days) >= timeout + 7):
         updateServer(id, delete_time=int(days))
         await ctx.message.channel.send(f"Archived channels inactive for **{days}** days will be deleted.")
@@ -528,6 +562,7 @@ async def delete(ctx, days):
         await ctx.message.channel.send("Archived channels will no longer be deleted.")
     else:
         await ctx.message.channel.send(f"Deletion time must be greater than {timeout+7}.")
+        await clearSimple(ctx)
 
 
 @config.error
@@ -539,6 +574,7 @@ async def delete(ctx, days):
 async def permissions_error(ctx, error):
     if isinstance(error, MissingPermissions):
         await ctx.message.channel.send("You don't have permission to do this!")
+        await clearSimple(ctx)
 
 # Automatically archive inactive channels after 24 hours
 # @tasks.loop(hours=24)
@@ -573,8 +609,6 @@ async def autoArchive():
             timeout = server[2]
             delete_time = server[5]
 
-            #print(timeout, delete_time)
-
             error = False
 
             # Go through every text channel
@@ -594,21 +628,16 @@ async def autoArchive():
 
                         # Code to delete inactive channels
                         overwrite = channel.overwrites_for(guild.default_role)
-                        # print(channel.name, overwrite.send_messages)
                         if(channel.category != None and channel.category.name == server[1] and not overwrite.send_messages == False): # If the channel is in the archive and is not readonly
 
                             if(delete_time != None and delete_time > timeout): # Check if a delete time has been set
 
                                 days_since = await daysSinceActive(channel) # Check days since last active
 
-                                #print(days_since, delete_time)
-                                
                                 if days_since + 2 >= delete_time:
                                 
                                     if days_since >= delete_time:
 
-                                        # print(days_since)
-                                        # print(delete_time)
                                         await channel.delete()
                                         # pass
                                     
@@ -617,7 +646,6 @@ async def autoArchive():
                                         await logChannel.send(f"**{channel.name}** (<#{channel.id}>) will be deleted in **{days_until} day(s)** if it remains inactive.")
                             else:
                                 pass
-                                # print("Delete time not set")
                         
                         # Code to archive inactive channels if channel is not full
                         elif not archiveIsFull: 
@@ -675,8 +703,6 @@ async def on_message(message):
         # or, if it is a response to the bot, the question has timed out
         # And the message is not a command
 
-        # print(previous_message.embeds)
-
         if previous_message:
             previous_content = previous_message.content
 
@@ -689,20 +715,28 @@ async def on_message(message):
         (previous_message == None or \
         (previous_message.author != bot.user or \
         (previous_message.author == bot.user and not "?" in previous_content and not "enter" in previous_content.lower()) or \
-        await getTimeSince(previous_message) >= 20)) and \
+        getTimeSince(previous_message) >= 20)) and \
         message.content[:2] != "a!":
 
-            await message.channel.send("This channel has been archived! Which category would you like to restore it to?")
+            delete_until = await message.channel.send("This channel has been archived! Which category would you like to restore it to?")
+            delete_from = None
 
             # Get the category we want to restore the channel to and move channel
             cat_name = await inputCat(ctx, True)
             if cat_name:
                 await message.channel.edit(category=getCategory(cat_name, ctx))
-                await message.channel.send("Channel restored to **" + cat_name.upper() + "**.")
+                delete_from = await message.channel.send("Channel restored to **" + cat_name.upper() + "**.")
             
             overwrite = message.channel.overwrites_for(message.guild.default_role)
             if(overwrite.send_messages == False):
-                await message.channel.send("Run `a!unlock` to unlock this channel.")
+                await unlock(ctx)
+            
+            if(delete_from == None):
+                history = await ctx.message.channel.history(limit=1).flatten()
+                if(len(history) > 0):
+                    delete_from = history[0]
+
+            await clearMessages(ctx, delete_from, delete_until)
         
         await bot.process_commands(message) # Process commands
     

@@ -78,7 +78,11 @@
     - Remove permissions error message for channels that Archie cannot manage
 
 2.2.7:
-    - Bug fix: fixed logical error, timed out categories in archive were not being deleted.
+    - Bug fix: fixed logical error, timed out categories in archive were not being deleted
 
 2.2.8:
     - Bug fix: removed "not found" error when searching channels for message
+
+2.3.0:
+    - Add feature: Archie will delete some commands and responses to clean up clutter
+    - Locked channels restored from archive are automatically unlocked
