@@ -1,4 +1,4 @@
-# Bot permissions: manage channels, view channels, send messages, read message history - value: 68624
+# Bot permissions: manage channels, view channels, send messages, manage messages, read message history - value: 68624
 
 import os
 import discord
@@ -19,7 +19,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.3.1")
+activity = discord.Game(name="a!help | v.2.3.2")
 
 bot = commands.Bot(command_prefix='a!', activity=activity)
 
@@ -194,39 +194,72 @@ def updateServer(id, **kwargs):
 
 async def clearMessages(ctx, delete_from, delete_until):
 
-    print("Starting clear")
-    if (delete_from == None):
-        history = await ctx.message.channel.history(limit=1).flatten()
-        if(len(history) > 0):
-            delete_from = history[0]
+    # First check that the bot has the right permissions
+    bot_member = ctx.guild.get_member(bot.user.id)
+    if (bot_member.guild_permissions.manage_messages):
 
-    # Wait 3 seconds before starting to delete
-    await asyncio.sleep(3)
-    start_found = False
-    previous_message = -1
-    messages_to_skip = 0
-    
-    while (previous_message != None and previous_message != delete_until):
-        history = await ctx.message.channel.history(limit=(1 + messages_to_skip)).flatten()
-        if(len(history) > 0):
-            previous_message = history[-1]
-            if (not start_found and previous_message == delete_from):
-                start_found = True
-            elif (not start_found):
-                messages_to_skip += 1
-            if(getTimeSince(previous_message) > getTimeSince(delete_until)):
-                previous_message = None
+        print("Starting clear")
+        if (delete_from == None):
+            history = await ctx.message.channel.history(limit=1).flatten()
+            if(len(history) > 0):
+                delete_from = history[0]
+
+        # Wait 3 seconds before starting to delete
+        await asyncio.sleep(3)
+        start_found = False
+        previous_message = -1
+        messages_to_skip = 0
+        
+        while (previous_message != None and previous_message != delete_until):
+            history = await ctx.message.channel.history(limit=(1 + messages_to_skip)).flatten()
+            if(len(history) > 0):
+                previous_message = history[-1]
+                if (not start_found and previous_message == delete_from):
+                    start_found = True
+                elif (not start_found):
+                    messages_to_skip += 1
+                if(getTimeSince(previous_message) > getTimeSince(delete_until)):
+                    previous_message = None
+                else:
+                    if (start_found): # Do nothing until you've reached delete_from
+                        await previous_message.delete()
             else:
-                if (start_found): # Do nothing until you've reached delete_from
-                    await previous_message.delete()
-        else:
-            previous_message = None
+                previous_message = None
+
+    else:
+        descrip = "Archie is now able to clear messages from certain interactions (including bot command errors, archiving, and " + \
+            "restoring) to reduce clutter. However, you must kick and re-invite Archie with the 'Manage Messages' permission to " + \
+            " access this feature.\n\n" + \
+            "Please find the updated invite link on Top.gg (https://top.gg/bot/857027766976118806). You will **not** have to " + \
+            "re-configure Archie after re-inviting him."
+        embed = discord.Embed(title="BOT UPDATE  :rocket:", description=descrip, color=0xff4912)
+        await ctx.message.channel.send(embed=embed)
+
 
 async def clearSimple(ctx, message_count=2):
-    history = await ctx.message.channel.history(limit=message_count).flatten()
-    await asyncio.sleep(3)
-    for message in history:
-        await message.delete()
+
+    # First check that the bot has the right permissions
+    bot_member = ctx.guild.get_member(bot.user.id)
+
+    if (bot_member.guild_permissions.manage_messages):
+
+        print("Has permissions")
+
+        history = await ctx.message.channel.history(limit=message_count).flatten()
+        await asyncio.sleep(3)
+        for message in history:
+            await message.delete()
+
+    else:
+
+        descrip = "Archie is now able to clear messages from certain interactions (including bot command errors, archiving, and " + \
+            "restoring) to reduce clutter. However, you must kick and re-invite Archie with the 'Manage Messages' permission to " + \
+            " access this feature.\n\n" + \
+            "Please find the updated invite link on Top.gg (https://top.gg/bot/857027766976118806). You will **not** have to " + \
+            "re-configure Archie after re-inviting him."
+        embed = discord.Embed(title="BOT UPDATE  :rocket:", description=descrip, color=0xff4912)
+        await ctx.message.channel.send(embed=embed)
+    
 
 ########## BOT FUNCTIONS ##########
 

@@ -89,3 +89,6 @@
 
 2.3.1:
     - Bug fix: send "archive full" message was not awaited during auto-archive
+
+2.3.2:
+    - Add update message for servers where Archie does not have "Manage Messages" permission
