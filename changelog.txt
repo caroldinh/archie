@@ -96,3 +96,6 @@
 2.4.0:
     - Archie's database was reset by Heroku :(
     - Get Archie back up and running again and update with Discord Intents
+
+2.4.1:
+    - Add bug report command (a!bug) and add information to help menu

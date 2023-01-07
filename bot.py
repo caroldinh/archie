@@ -19,7 +19,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.4.0")
+activity = discord.Game(name="a!help | v.2.4.1")
 intents = discord.Intents.default()
 intents.messages = True
 
@@ -296,9 +296,10 @@ async def help(ctx):
     embed.add_field(name="`a!lock`", value=":open_file_folder: Make an archived channel read-only. Can be reversed with `a!unlock`.", inline=False)
     embed.add_field(name="`a!info`", value=":open_file_folder: Display the configurations for this server.", inline=False)
     # embed.add_field(name="a!categories", value=" - List all categories in server.", inline=False)
-    embed.add_field(name="`a!help`", value=":open_file_folder: Display the help menu.\n\n" + \
+    embed.add_field(name="`a!help`", value=":open_file_folder: Display the help menu.\n\n", inline=False)
+    embed.add_field(name="`a!bug`", value=":warning: Report bugs at https://forms.gle/p9FJiYyfSGtvREXR7.\n\n" + \
         "You can restore an archived channel simply by sending a message in it.\n\n" + \
-        "For more information, visit Archie on Top.gg: https://top.gg/bot/857027766976118806", inline=False)
+        "For more information, visit Archie on Top.gg: https://top.gg/bot/857027766976118806\n\n", inline=False)
 
     await ctx.message.channel.send(embed=embed)
 
@@ -553,10 +554,10 @@ async def info(ctx):
         server = ["None", "None", "None", "None", "None", "None"]
 
     embed = discord.Embed(title=f"Archie Configuration Information", description=f"Archie's configuration info for **{ctx.message.guild.name}.**", color=0xff4912)
-    embed.add_field(name="`Archive`", value=f"{server[1]}\n⚙️ *Archived channels are moved to the category **{server[1].upper()}**.*", inline=False)
-    embed.add_field(name="`Archive Timeout`", value=f"{server[2]}\n⚙️ *Channels are archived after **{server[2]} days** of inactivity.*", inline=False)
-    embed.add_field(name="`Deletion Timeout`", value=f"{server[5]}\n⚙️ *Channels are deleted from the archive after **{server[5]} days** of inactivity.*", inline=False)
-    embed.add_field(name="`Frozen`", value=f"{server[3]}\n⚙️ *These categories cannot be modified.*\n\nIf any value is 'None', that means you have not configured it yet.", inline=False)
+    embed.add_field(name="`Archive`", value=f"{server[1]}\n️:gear: *Archived channels are moved to the category **{server[1].upper()}**.*", inline=False)
+    embed.add_field(name="`Archive Timeout`", value=f"{server[2]}\n️:gear: *Channels are archived after **{server[2]} days** of inactivity.*", inline=False)
+    embed.add_field(name="`Deletion Timeout`", value=f"{server[5]}\n:gear: *Channels are deleted from the archive after **{server[5]} days** of inactivity.*", inline=False)
+    embed.add_field(name="`Frozen`", value=f"{server[3]}\n:gear: *These categories cannot be modified.*\n\nIf any value is 'None', that means you have not configured it yet.", inline=False)
 
     await ctx.message.channel.send(embed=embed)
 
@@ -590,6 +591,13 @@ async def archive(ctx, readonly=None):
         else:
            await ctx.message.channel.send(f"Your archive category **{archive.name.upper()}** is full. Please make space in your archive or create a new one.")
            await clearSimple(ctx)
+
+# Report bug
+@bot.command()
+async def bug(ctx):
+    embed = discord.Embed(title=f"Archie Bug Report", description="Please report bugs at https://forms.gle/p9FJiYyfSGtvREXR7. Thanks!", color=0xff4912)
+    await ctx.message.channel.send(embed=embed)
+
 
 @bot.command()
 @has_permissions(manage_guild=True)
