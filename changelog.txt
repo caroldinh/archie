@@ -92,3 +92,7 @@
 
 2.3.2:
     - Add update message for servers where Archie does not have "Manage Messages" permission
+
+2.4.0:
+    - Archie's database was reset by Heroku :(
+    - Get Archie back up and running again and update with Discord Intents

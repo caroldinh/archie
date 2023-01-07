@@ -19,9 +19,11 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 # DATABASE_URL = os.getenv('DATABASE_URL')
 
-activity = discord.Game(name="a!help | v.2.3.2")
+activity = discord.Game(name="a!help | v.2.4.0")
+intents = discord.Intents.default()
+intents.messages = True
 
-bot = commands.Bot(command_prefix='a!', activity=activity)
+bot = commands.Bot(command_prefix='a!', activity=activity, intents=intents)
 
 connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
 
@@ -79,6 +81,10 @@ async def daysSinceActive(channel):
 async def checkTimedOut(channel, timeout):
 
     days_since = await daysSinceActive(channel)
+
+    if timeout == None:
+        return False 
+
     return days_since > timeout
 
 def execute_query(connection, query):
@@ -102,19 +108,6 @@ def execute_read_query(connection, query):
 
 def addServer(id, category, timeout):
 
-    create_servers_table = """
-    CREATE TABLE IF NOT EXISTS servers (
-    id BIGINT PRIMARY KEY,
-    archive TEXT NOT NULL, 
-    timeout INTEGER,
-    permanent_categories TEXT,
-    permanent_channels TEXT,
-    delete_time INTEGER
-    )
-    """
-
-    # execute_query(connection, create_servers_table)
-
     if timeout:
         server = [id, category, timeout]
         insert_query = "INSERT INTO servers (id, archive, timeout) VALUES (%s, %s, %s)"
@@ -124,6 +117,7 @@ def addServer(id, category, timeout):
 
     print(insert_query)
 
+    global connection
     connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     connection.autocommit = True
     cursor = connection.cursor()
@@ -136,6 +130,8 @@ def addServer(id, category, timeout):
 def readServer(id):
 
     select_server = (f"SELECT * FROM servers WHERE id={id}")
+
+    global connection
     connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
     server = execute_read_query(connection, select_server)
 
@@ -150,6 +146,7 @@ def updateServer(id, **kwargs):
     update_server = "UPDATE servers\nSET "
     count = 0
 
+    global connection
     connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
 
     new_values = []
@@ -266,6 +263,20 @@ async def clearSimple(ctx, message_count=2):
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
+
+    create_servers_table = """
+    CREATE TABLE IF NOT EXISTS servers (
+    id BIGINT PRIMARY KEY,
+    archive TEXT NOT NULL, 
+    timeout INTEGER,
+    permanent_categories TEXT,
+    permanent_channels TEXT,
+    delete_time INTEGER
+    )
+    """
+
+    execute_query(connection, create_servers_table)
+
     if (not DEBUG or DEBUG == '0'):
         await autoArchive()
         print("Autoarchive done")
@@ -542,10 +553,10 @@ async def info(ctx):
         server = ["None", "None", "None", "None", "None", "None"]
 
     embed = discord.Embed(title=f"Archie Configuration Information", description=f"Archie's configuration info for **{ctx.message.guild.name}.**", color=0xff4912)
-    embed.add_field(name="`Archive`", value=f"{server[1]}\n*- Archived channels are moved to the category **{server[1].upper()}**.*", inline=False)
-    embed.add_field(name="`Archive Timeout`", value=f"{server[2]}\n*- Channels are archived after **{server[2]} days** of inactivity.*", inline=False)
-    embed.add_field(name="`Deletion Timeout`", value=f"{server[5]}\n*- Channels are deleted from the archive after **{server[5]} days** of inactivity.*", inline=False)
-    embed.add_field(name="`Frozen`", value=f"{server[3]}\n*- These categories cannot be modified.*\n\nIf any value is 'None', that means you have not configured it yet.", inline=False)
+    embed.add_field(name="`Archive`", value=f"{server[1]}\n⚙️ *Archived channels are moved to the category **{server[1].upper()}**.*", inline=False)
+    embed.add_field(name="`Archive Timeout`", value=f"{server[2]}\n⚙️ *Channels are archived after **{server[2]} days** of inactivity.*", inline=False)
+    embed.add_field(name="`Deletion Timeout`", value=f"{server[5]}\n⚙️ *Channels are deleted from the archive after **{server[5]} days** of inactivity.*", inline=False)
+    embed.add_field(name="`Frozen`", value=f"{server[3]}\n⚙️ *These categories cannot be modified.*\n\nIf any value is 'None', that means you have not configured it yet.", inline=False)
 
     await ctx.message.channel.send(embed=embed)
 
@@ -614,6 +625,7 @@ async def permissions_error(ctx, error):
 async def autoArchive():
 
     # Update connection in case DATABASE_URL changed
+    global connection
     connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
 
     # Run this in all of the servers Archie is active in
@@ -622,7 +634,12 @@ async def autoArchive():
 
         id = guild.id
         archive = 0
+
         server = readServer(id)
+
+        if server == None:
+            addServer(id, "", None)
+
         archiveIsFull = False
 
         logChannel = None
@@ -663,7 +680,7 @@ async def autoArchive():
                         overwrite = channel.overwrites_for(guild.default_role)
                         if(channel.category != None and channel.category.name == server[1] and not overwrite.send_messages == False): # If the channel is in the archive and is not readonly
 
-                            if(delete_time != None and delete_time > timeout): # Check if a delete time has been set
+                            if(delete_time != None and timeout != None and delete_time > timeout): # Check if a delete time has been set
 
                                 days_since = await daysSinceActive(channel) # Check days since last active
 
@@ -714,9 +731,6 @@ async def autoArchive():
 
 @bot.event
 async def on_message(message):
-
-    # Update connection in case DATABASE_URL changed
-    connection = psycopg2.connect(os.getenv('DATABASE_URL'), sslmode='require')
 
     # Get context and current guild
     ctx = await bot.get_context(message)
@@ -770,11 +784,15 @@ async def on_message(message):
                     delete_from = history[0]
 
             await clearMessages(ctx, delete_from, delete_until)
+
+            return
         
-        await bot.process_commands(message) # Process commands
+        # await bot.process_commands(message) # Process commands
     
-    except: # If an archive category doesn't exist, just process possible commands
-        await bot.process_commands(message)
+    except Exception as e: # If an archive category doesn't exist, just process possible commands
+        pass
+    
+    await bot.process_commands(message)
 
 # autoArchive.start() # Start 24-hour auto-archiver
 bot.run(TOKEN)
